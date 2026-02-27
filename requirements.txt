@@ -1,0 +1,17 @@
+pathway
+kafka-python
+fastapi
+uvicorn
+requests
+textblob
+numpy
+openai
+pdf2image
+pillow
+unstructured
+streamlit
+plotly
+requests
+pandas
+streamlit-autorefresh
+websocket-client
