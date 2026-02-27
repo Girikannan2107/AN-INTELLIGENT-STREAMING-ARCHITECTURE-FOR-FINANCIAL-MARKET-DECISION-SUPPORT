@@ -1,155 +1,160 @@
+import json
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, asdict
+from typing import Optional
+
+import requests
+from kafka import KafkaProducer
+from kafka.errors import NoBrokersAvailable
+
+from pathway_app.config import (
+    KAFKA_BOOTSTRAP,
+    MARKET_TOPIC,
+    ALPHA_VANTAGE_KEY,
+    MARKET_FETCH_INTERVAL,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# =====================================================
-# Configuration Layer (Immutable Strategy Parameters)
-# =====================================================
+# ----------------------------------------
+# Domain Model
+# ----------------------------------------
+
 @dataclass(frozen=True)
-class VolatilityConfig:
-    """
-    Immutable configuration object for volatility thresholds.
-
-    Design Decisions:
-    -----------------
-    - frozen=True ensures immutability → prevents accidental mutation
-    - Separates configuration from business logic
-    - Makes unit testing easier (inject custom configs)
-    - Supports environment-based overrides
-
-    This allows:
-    - Strategy tuning without modifying core logic
-    - Clean dependency injection
-    """
-
-    # Price boundaries
-    low_price_threshold: float = 200.0
-    high_price_threshold: float = 400.0
-
-    # Volatility scores mapped to price ranges
-    low_volatility: float = 0.3
-    medium_volatility: float = 0.5
-    high_volatility: float = 0.7
+class MarketEvent:
+    symbol: str
+    price: float
+    timestamp: float
 
 
-# =====================================================
-# Volatility Agent (Business Logic Layer)
-# =====================================================
-class VolatilityAgent:
-    """
-    VolatilityAgent computes a deterministic volatility score
-    from the given stock price.
+# ----------------------------------------
+# Alpha Vantage Client
+# ----------------------------------------
 
-    Architecture Principles:
-    ------------------------
-    - Single Responsibility: Only calculates volatility
-    - Dependency Injection: Accepts external configuration
-    - Encapsulation: Internal rule engine hidden from API
-    - Deterministic Rule-Based System (replaceable with ML)
+class AlphaVantageClient:
+    BASE_URL = "https://www.alphavantage.co/query"
 
-    Future Upgrade Path:
-    --------------------
-    - Replace rule engine with statistical volatility model
-    - Integrate rolling window variance calculation
-    - Connect to real-time streaming market engine
-    """
+    def __init__(self, api_key: str, symbol: str = "AAPL") -> None:
+        self.api_key = api_key
+        self.symbol = symbol
 
-    def __init__(self, config: VolatilityConfig | None = None) -> None:
-        """
-        Initializes agent with injected configuration.
+    def fetch_price(self) -> Optional[MarketEvent]:
+        if not self.api_key:
+            raise ValueError("ALPHA_VANTAGE_KEY not configured")
 
-        If no configuration is provided,
-        a default immutable configuration is used.
+        params = {
+            "function": "GLOBAL_QUOTE",
+            "symbol": self.symbol,
+            "apikey": self.api_key,
+        }
 
-        This pattern improves:
-        - Testability
-        - Flexibility
-        - Strategy customization
-        """
-        self.config = config or VolatilityConfig()
+        response = requests.get(self.BASE_URL, params=params, timeout=10)
+        data = response.json()
 
-    # =====================================================
-    # Public API Method
-    # =====================================================
-    def calculate(self, price: float) -> float:
-        """
-        Computes normalized volatility score.
+        quote = data.get("Global Quote")
 
-        Workflow:
-        ---------
-        1. Validate input
-        2. Apply rule engine
-        3. Log computation for observability
+        if not quote or "05. price" not in quote:
+            logger.warning("Invalid API response: %s", data)
+            return None
 
-        Args:
-            price (float): Current stock price
-
-        Returns:
-            float: Volatility score (0.0 - 1.0)
-
-        Raises:
-            ValueError: If price is invalid
-        """
-
-        # Defensive programming ensures system stability
-        self._validate(price)
-
-        # Delegating computation to internal rule engine
-        volatility = self._compute_volatility(price)
-
-        # Debug-level logging keeps production logs clean
-        # while allowing deep inspection during development
-        logger.debug(
-            "Volatility calculated | Price=%.2f | Score=%.2f",
-            price,
-            volatility,
+        return MarketEvent(
+            symbol=self.symbol,
+            price=float(quote["05. price"]),
+            timestamp=time.time(),
         )
 
-        return volatility
 
-    # =====================================================
-    # Internal Rule Engine
-    # =====================================================
-    def _compute_volatility(self, price: float) -> float:
+# ----------------------------------------
+# Kafka Producer Wrapper
+# ----------------------------------------
+
+class KafkaMarketProducer:
+    def __init__(self, bootstrap_servers: str) -> None:
+        self.bootstrap_servers = bootstrap_servers
+        self.producer = self._connect()
+
+    def _connect(self) -> KafkaProducer:
+        retry_delay = 5
+        max_retries = 5
+
+        for attempt in range(max_retries):
+            try:
+                producer = KafkaProducer(
+                    bootstrap_servers=self.bootstrap_servers,
+                    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                )
+                logger.info("✅ Connected to Kafka")
+                return producer
+            except NoBrokersAvailable:
+                logger.warning(
+                    "Kafka unavailable (attempt %s/%s). Retrying in %s seconds...",
+                    attempt + 1,
+                    max_retries,
+                    retry_delay,
+                )
+                time.sleep(retry_delay)
+
+        raise ConnectionError("Unable to connect to Kafka after retries")
+
+    def send(self, topic: str, event: MarketEvent) -> None:
+        self.producer.send(topic, asdict(event))
+        logger.info("Sent market event: %s", event)
+
+    def close(self) -> None:
+        self.producer.close()
+
+
+# ----------------------------------------
+# Main Service
+# ----------------------------------------
+
+class MarketProducerService:
+    """
+    Coordinates fetching market data and sending to Kafka.
+    """
+
+    def __init__(
+        self,
+        client: AlphaVantageClient,
+        producer: KafkaMarketProducer,
+        topic: str,
+        interval: int,
+    ) -> None:
+        self.client = client
+        self.producer = producer
+        self.topic = topic
+        self.interval = interval
+        self._running = True
+
+    def run_once(self) -> None:
         """
-        Applies threshold-based volatility logic.
-
-        Rule Logic:
-        ----------
-        - Price < low threshold  → Low volatility
-        - Price > high threshold → High volatility
-        - Otherwise              → Medium volatility
-
-        This function is intentionally private
-        to protect internal business logic.
+        Executes a single fetch-send cycle (testable).
         """
 
-        if price < self.config.low_price_threshold:
-            return self.config.low_volatility
+        event = self.client.fetch_price()
 
-        if price > self.config.high_price_threshold:
-            return self.config.high_volatility
+        if event:
+            self.producer.send(self.topic, event)
 
-        return self.config.medium_volatility
-
-    # =====================================================
-    # Validation Layer
-    # =====================================================
-    @staticmethod
-    def _validate(price: float) -> None:
+    def start(self) -> None:
         """
-        Validates input price before processing.
-
-        Why Static?
-        ----------
-        - Does not depend on instance state
-        - Clearly indicates utility behavior
-
-        Raises:
-            ValueError: If price is not positive
+        Starts continuous market streaming.
         """
 
-        if price <= 0:
-            raise ValueError("Price must be greater than zero")
+        logger.info("🚀 Market Producer Service Started")
+
+        try:
+            while self._running:
+                self.run_once()
+                time.sleep(self.interval)
+
+        except KeyboardInterrupt:
+            logger.info("🛑 Market Producer Stopped")
+
+        finally:
+            self.producer.close()
+
+    def stop(self) -> None:
+        self._running = False
