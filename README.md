@@ -1,287 +1,88 @@
-<<<<<<< HEAD
-AI-Powered Real-Time Market Intelligence Streaming System
-1. Overview
+AN INTELLIGENT STREAMING ARCHITECTURE FOR FINANCIAL MARKET DECISION SUPPORT
+Overview
 
-This project is a distributed, real-time market intelligence platform built using Apache Kafka, Pathway, FastAPI, OpenAI, and Docker.
+This project presents a real-time, AI-powered financial market intelligence platform built using an event-driven microservices architecture. The system ingests live stock market data and streaming news events, processes them using a stream computation engine, applies predictive analytics, and exposes intelligent insights through REST APIs and a visualization dashboard. The architecture is designed to be modular, scalable, and production-ready, leveraging distributed messaging and AI augmentation for enhanced financial decision support.
 
-The system ingests live stock market data and streaming news headlines, processes them through a real-time streaming engine, applies AI-driven analytics, and generates predictive insights in an event-driven microservices architecture.
+The platform demonstrates how streaming systems, modern backend frameworks, and large language models can be combined to build a responsive and extensible financial analytics infrastructure.
 
-The platform is fully containerized and designed following clean architecture principles to ensure scalability, modularity, and maintainability.
+Problem Statement
 
-2. Problem Statement
+Financial markets generate high-frequency, high-volume data that requires immediate analysis to enable effective decision-making. Traditional batch-processing systems introduce latency and lack contextual reasoning capabilities. There is a growing need for a system that can process real-time events, apply predictive logic, and enhance responses with contextual AI reasoning.
 
-Financial markets generate high-frequency, high-volume data streams. Traditional batch processing systems are not suitable for:
+This project addresses these challenges by combining real-time stream processing with retrieval-augmented generation (RAG) using large language models. The result is a system capable of transforming streaming market and news data into actionable intelligence.
 
-Low-latency analytics
+Architectural Design
 
-Real-time decision support
+The system follows a distributed, event-driven architecture composed of loosely coupled microservices. Stock price data and market-related news are produced and published to Apache Kafka topics. A Pathway-based streaming engine consumes these topics and applies domain-specific agents to generate trading recommendations and confidence metrics. The processed predictions are then published to a dedicated prediction topic.
 
-Context-aware sentiment analysis
+A FastAPI service exposes the latest predictions via REST endpoints, while a RAG service powered by OpenAI GPT enhances contextual query analysis. A Streamlit dashboard serves as the presentation layer, consuming API endpoints to display live insights.
 
-Scalable event-driven processing
+The detailed architectural explanation is documented in the docs/architecture.md file.
 
-This system addresses those challenges by integrating:
+Technology Stack
 
-Event streaming infrastructure
+The system is implemented using Python 3.10 and integrates Apache Kafka for distributed event streaming, Pathway for real-time stream processing, FastAPI for backend API services, OpenAI GPT for contextual intelligence, and Streamlit for the user interface. Docker and Docker Compose are used to containerize and orchestrate all services, ensuring reproducible and environment-independent deployment.
 
-Real-time computation
+Testing is implemented using Pytest to validate core components and pipeline behavior.
 
-AI-powered contextual intelligence
+Core Features
 
-Microservice-based architecture
+The platform provides real-time stock market ingestion, streaming news processing, event-driven prediction generation, AI-powered contextual query responses, RESTful API integration, and dashboard visualization. The microservice-based design ensures separation of concerns and independent scalability of components. All services are fully containerized for production-style deployment.
 
-3. System Architecture
-3.1 Core Components
+Repository Structure
 
-Market Producer – Fetches live stock prices from Alpha Vantage
+The repository follows a clean and modular organization that separates concerns by service and responsibility. Source code is located under the src directory, where components are grouped into API services, streaming logic, RAG services, and UI modules. Tests are maintained in a dedicated tests directory, and Docker configurations are organized under the docker directory. Architectural documentation is provided under the docs folder.
 
-News Producer – Streams market-related headlines
+This structure ensures clarity, maintainability, and extensibility of the system.
 
-Apache Kafka – Event streaming backbone
+Installation and Deployment
 
-Pathway Engine – Real-time stream processing
+The system can be deployed using Docker Compose. After cloning the repository, ensure that Docker and Docker Compose are installed. Create an environment configuration file as described below, then build and start all services using:
 
-Prediction Topic – Stores processed trading signals
+docker-compose up --build
 
-FastAPI Service – Exposes REST APIs
+Once started, the FastAPI service is accessible at http://localhost:8000, API documentation is available at http://localhost:8000/docs, and the Streamlit dashboard can be accessed at http://localhost:8501.
 
-RAG Service – GPT-based contextual intelligence
+To stop the system, run:
 
-Streamlit Dashboard – Visualization layer
+docker-compose down
 
-Docker Compose – Service orchestration
+The project can also be executed locally without Docker by installing dependencies from requirements.txt and starting services individually.
 
-3.2 Data Flow
+Environment Configuration
 
-Market Producer fetches stock price data.
-
-News Producer generates headline events.
-
-Producers publish events to Kafka topics.
-
-Pathway consumes Kafka streams and generates predictions.
-
-Predictions are published to the prediction_topic.
-
-FastAPI exposes prediction data via REST endpoints.
-
-RAG service enhances contextual queries using OpenAI GPT.
-
-Streamlit dashboard consumes API endpoints for visualization.
-
-4. Technology Stack
-
-Python 3.10+
-
-Apache Kafka
-
-Pathway Streaming Engine
-
-FastAPI
-
-OpenAI GPT API
-
-Alpha Vantage API
-
-Streamlit
-
-Docker & Docker Compose
-
-Pytest
-
-5. Repository Structure
-src/
-  api/
-    server.py
-  pathway_app/
-    agents/
-    producers/
-    services/
-    config.py
-    main.py
-    main_news.py
-  rag_service/
-    openai_client.py
-    rag_pipeline.py
-    app.py
-  ui/
-    services/
-    dashboard.py
-tests/
-docker/
-docs/
-docker-compose.yml
-requirements.txt
-README.md
-6. Features
-
-Real-time stock data ingestion
-
-News sentiment-driven signal generation
-
-Event-driven Kafka architecture
-
-Pathway streaming computation engine
-
-AI-powered contextual RAG system
-
-REST API integration
-
-Modular microservice design
-
-Fully Dockerized deployment
-
-Unit-tested core components
-
-Clean architecture implementation
-
-7. Environment Configuration
-
-Create a .env file in the root directory:
+The system requires external API credentials for OpenAI and Alpha Vantage. These should be defined in a .env file in the project root directory:
 
 OPENAI_API_KEY=your_openai_api_key
 ALPHA_VANTAGE_KEY=your_alpha_vantage_key
 KAFKA_BOOTSTRAP=kafka:9092
 
-Do not commit .env to version control.
+The .env file is excluded from version control to ensure security. A sanitized .env.example file is provided as a reference template.
 
-An .env.example file is provided for reference.
+API Endpoints
 
-8. Installation and Execution
-8.1 Option 1: Docker Deployment (Recommended)
+The FastAPI service exposes endpoints for retrieving the latest prediction and submitting contextual queries. The /latest endpoint returns the most recent trading recommendation along with confidence and brokerage estimation. The /query endpoint integrates the RAG pipeline to generate contextual responses based on streaming insights and GPT-based reasoning.
 
-Build and start all services:
+Testing
 
-docker-compose up --build
-
-For detached mode:
-
-docker-compose up -d --build
-
-Access services:
-
-FastAPI: http://localhost:8000
-
-FastAPI Docs: http://localhost:8000/docs
-
-Streamlit Dashboard: http://localhost:8501
-
-Stop services:
-
-docker-compose down
-
-Clean restart:
-
-docker-compose down -v
-docker-compose build --no-cache
-docker-compose up
-8.2 Option 2: Local Development
-
-Install dependencies:
-
-pip install -r requirements.txt
-
-Run FastAPI server:
-
-uvicorn src.api.server:app --reload
-
-Run Streamlit dashboard:
-
-streamlit run src/ui/dashboard.py
-
-Run Pathway streaming:
-
-python -m src.pathway_app.main
-9. API Documentation
-9.1 GET /latest
-
-Returns the most recent prediction.
-
-Example response:
-
-{
-  "symbol": "AAPL",
-  "price": 287.45,
-  "recommendation": "BUY",
-  "confidence": 0.82,
-  "brokerage_cost": 12.45,
-  "timestamp": 1772000123.45
-}
-9.2 POST /query
-
-Performs GPT-based contextual analysis.
-
-Request:
-
-{
-  "text": "Why did Apple stock increase?"
-}
-
-Response:
-
-{
-  "query": "...",
-  "context": [...],
-  "answer": "..."
-}
-10. Testing
-
-Run unit tests:
+The repository includes automated unit tests to validate agent logic, streaming transformations, and RAG integration. Tests can be executed using:
 
 pytest tests/
 
-Test coverage includes:
+The test suite ensures correctness of predictive logic and maintains code reliability during development.
 
-Agent prediction logic
+Design Principles
 
-Streaming service
+The system adheres to clean architecture principles and emphasizes separation of concerns, modular service design, dependency injection, and strong typing. Configuration is environment-driven, and services are stateless to enable horizontal scalability. Structured logging and consistent error handling are implemented to improve observability and maintainability.
 
-RAG pipeline
+Security Considerations
 
-Core service components
+Sensitive credentials are managed via environment variables and excluded from version control. The repository complies with GitHub secret scanning policies and avoids hardcoded secrets. Containerized deployment ensures isolation between services, and the architecture supports future integration of authentication and rate limiting mechanisms.
 
-11. Architectural Design Principles
+Future Enhancements
 
-Separation of concerns
+Future improvements may include asynchronous Kafka consumers, integration with a vector database for advanced retrieval, Kubernetes-based orchestration, CI/CD automation, performance benchmarking, and enhanced monitoring through metrics instrumentation.
 
-Dependency injection
-
-Domain-driven modeling
-
-Service abstraction
-
-Config-driven configuration
-
-Structured logging
-
-Stateless services
-
-Scalable event-driven design
-
-12. Future Enhancements
-
-Vector database integration
-
-Async Kafka consumers (aiokafka)
-
-Streaming GPT responses
-
-Prometheus metrics integration
-
-Kubernetes deployment
-
-CI/CD automation
-
-Performance benchmarking
-
-13. License
+License
 
 This project is licensed under the MIT License.
-
-14. Author
-
-Girikannan M P
-=======
-# AN-INTELLIGENT-STREAMING-ARCHITECTURE-FOR-FINANCIAL-MARKET-DECISION-SUPPORT
-AI-powered real-time market intelligence platform built with Kafka, Pathway, FastAPI, and OpenAI. Streams live stock and news data, performs event-driven analytics, and generates predictive insights using a scalable microservices architecture.
->>>>>>> b48ec76e29b97d596d17458a6555d94d1ddc8b20
